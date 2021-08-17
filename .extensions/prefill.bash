@@ -1,22 +1,30 @@
 #!/bin/bash
 # "Prefills" a pass entry file with data from an encrypted template
 
-# echo "Not implemented" >&2
-# exit 1
+# NOTE: This MUST BE removed in order to avoid namespace collisions with `pass`
+# itself!!
+# if [ -f "$BASH_INCLUDE" ]; then
+#     source "$BASH_INCLUDE"
+# else
+#     echo "Could not find 'include.sh'" >&2
+#     exit 23
+# fi
 
-if [ -f "$BASH_INCLUDE" ]; then
-    source "$BASH_INCLUDE"
-else
-    echo "Could not find 'include.sh'" >&2
-    exit 23
+typeset _EDITOR="${EDITOR:-vi}"
+typeset _TEMPLATE=
+typeset _TEMPLATE_NAME=".template"
+typeset _TEMPLATE_WRITER="${PREFIX}/.scripts/write-template.bash"
+typeset _TEMPLATE_JOINER="${PREFIX}/.scripts/merge-templates.bash"
+typeset _COMMIT_MSG_FORMAT=\
+    "%s password file for %s using template %s and editor ${_EDITOR}"
+typeset _ACTION="generate"
+
+if [ ! -x "${_TEMPLATE_WRITER}" ] || [ ! -x "${_TEMPLATE_JOINER}" ]; then
+    die "Cannot find template read / write scripts"
 fi
 
-typeset -r PASSROOT="${PASS_DIR:-$HOME/.password-store}"
-PASSROOT="${PASSROOT%/}"    # Remove trailing slash
-typeset TEMPLATE_FNAME=".template"
-
-_get_template_path() {
-    local path="$*"
+pass_get_template_path() {
+    local path="$(pass_get_path "$1")"
 
     while [ -n "$path" ] && [ ! -f "${PASSROOT}/${path}/${TEMPLATE_FNAME}" ];
     do
@@ -24,84 +32,123 @@ _get_template_path() {
     done
     path="${path}/${TEMPLATE_FNAME}"
     debug_vars path PASSROOT
-    local path="${PASSROOT}/${path#/}"
+    path="${PASSROOT}/${path#/}"
     echo "$path" && [ -f "$path" ]
     return $?
 }
 
-_edit_template() {
-    local path="$1"
-    vipe <${path}
-}
-
 main() {
-    local -A fields=( )
+    local -A template_params=( )
     local -a comments=( )
     local -a links=( )
     local -a tags=( )
+    local -i generate=1
     while [ $# -gt 0 ]; do
         case "$1" in
-
-            # Sub-commands
-            new-template)
-                shift   # OK if this fails
-                _edit_template "$(_get_template_path "$*")"
-                ;;
-
-            # Common fields can be abbreviated
-            -n)     # Username
-                shift && fields["username"]="$1"
-                ;;
-            -u)     # URL
-                shift && fields["url"]="$1"
-                ;;
-            -H)
-                shift && fields["hostname"]="$1"
+            -G)     # Do not generate password
+                generate=0
                 ;;
             -c)     # Comments (cumulative)
-                shift && comments+=( "$1" )
+                comments+=( "$2" )
                 ;;
             -t)     # Tags (cumulative)
-                shift && tags+=( "$1" )
-                ;;
-            -e)     # Email
-                shift && fields["email"]="$1"
-                ;;
-            -d)     # Description
-                shift && fields["description"]="$1"
+                tags+=( "$2" )
                 ;;
             -L)     # "Links"
                     # Can represent a reference to any type of related data or
                     # file
-                shift && links+=( "$1" )
-                ;;
-
-            # Long-form options are interpreted "verbatim"
-            --*)
-                fields["${1#--}"]="$2" && shift
+                links+=( "$2" )
                 ;;
             --)
                 shift && break
+                ;;
+            -*)
+                template_params+=( "$1" "$2" )
                 ;;
             *)
                 break
                 ;;
         esac
-        shift
+        shift 2
     done
-    shift $(( OPTIND - 1 )) && OPTIND=1
 
-    debug_vars fields comments links tags
+    local rel_path="$1"
+    local fpath="$(pass_get_path "$rel_path")"
+    local dir="$(dirname "$fpath")"
+    while [[ ! -r "${dir}/${_TEMPLATE_NAME}"  ]] &&
+        find "$PREFIX" -type d -name "${dir%/}" &>/dev/null
+    do
+        dir="$(dirname "$dir")"
+    done
+    _TEMPLATE="${dir}/${_TEMPLATE_NAME}"
+    find "$PREFIX" -type f -path "${_TEMPLATE}" ||
+        die "Could not locate a suitable template"
 
-    debug "Params: '$@'"
-    _get_template_path "$*"
+    
+    # while [ ! -r "$dir/" ]
+
+    # template="$(pass_get_template_path "$*")" ||
+    #     die "No template found!"
+
     return $?
-
-    # for field in "${!fields[@]}"; do
-    #     :
-    # done
-
-
 }
 
 main "$@"
+
+pass_get_tmpfile() {
+    # Note that a `trap`-handler is set in the `pass` main script to delete the
+    # secure tmpdir, so no further handling is required either here or by the
+    # caller
+    local seed="$1"
+    tmpdir      #Defines $SECURE_TMPDIR
+    echo "$(mktemp -u "$SECURE_TMPDIR/XXXXXX")-${seed//\//-}.txt"
+}
+
+pass_get_path() {
+    path="${1%/}"
+    check_sneaky_paths "$path"
+    mkdir -p -v "$PREFIX/$(dirname -- "$path")"
+    set_gpg_recipients "$(dirname -- "$path")"
+    echo "$PREFIX/$path"
+    set_git "$PREFIX/$path"     # Not clear what this one does...
+                                # TODO: Read the source carefully
+    return $?
+}
+
+pass_edit() {
+    local source="$1"
+    local dest="$2"
+    if ! [[ -r "$source" && ! -e "$dest" || "$dest" = "$source" ]]; then
+        die "Refusing to overwrite existing file '${dest}'"
+    fi
+    local tmpf="$(pass_get_tmpfile)"
+    pass_decrypt "$source" >"$tmpf" || die "Could not decrypt '$source'"
+    ${EDITOR:-vi} "$tmpf"
+    pass_encrypt "$tmpf" "$dest"
+    return $?
+}
+
+# TODO: Add namespace checks using `declare` at beginning of script
+pass_decrypt() {
+    local file="$1"
+    $GPG -d "${GPG_OPTS[@]}" "$file"
+    return $?
+}
+
+pass_encrypt() {
+    local infile="$1"
+    local outfile="$2"
+    while ! $GPG -e "${GPG_RECIPIENT_ARGS[@]}" -o "$1" "${GPG_OPTS[@]}" \
+        "$file";
+    do
+        yesno "GPG encryption failed.  Would you like to try again?"
+    done
+    return $?
+}
+
+pass_commit() {
+    local file="$1"
+    local format="$2"
+    shift 2
+    git_add_file "$file" "$(printf "$format" "$@")"
+}
