@@ -12,6 +12,7 @@ Dependencies:
       - pass-yaml
       - pass-create
       - pass-getfrom
+      - pass-annotate
     Third-party:
       - pass-tail
   Miscellaneous:

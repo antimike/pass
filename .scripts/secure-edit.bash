@@ -8,7 +8,9 @@ set -e
 set -o pipefail
 
 typeset file="$1"
-fifo="$(mktemp)" && rm -f $fifo && mkfifo $fifo ||
+typeset dest="${2:-${file}}"
+
+fifo="$(mktemp)" && rm -f "$fifo" && mkfifo "$fifo" ||
     die 27 "Unable to create FIFO"
 
 typeset key_regex="ID \([A-Z0-9]\+\)"
@@ -17,7 +19,7 @@ if [ -f "$file" ]; then
         tee >(grep -o "$key_regex" | cut -f2 -d' ' >${fifo} &) |
         sed -n '3,$p' |
         vipe |
-        gpg -e -a -r $(cat <${fifo}) >"$file"
+        gpg -e -a -r $(cat <${fifo}) >"$dest"
 else
     die 23 "File '$file' does not exist"
 fi
