@@ -1,4 +1,4 @@
-# TODO: Add bash completion scripts and install targets here
+# TODO: Figure out why not every completion script is being linked
 
 CMD_SCRIPTS := $(shell find . -name "*.bash" -executable)
 COMPDIR := ~/.local/etc/bash_completion.d
