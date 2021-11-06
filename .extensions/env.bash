@@ -1,24 +1,41 @@
 #!/bin/bash
-# Prints a script to assign environment variables based on
+# Print a script to assign environment variables based on
 # (1) a YAML specification file, and
-# (2) credentials stored in the \`pass\` store.
+# (2) credentials stored in the `pass` store.
+# If the file $PASS_DIR/.env.yaml exists and is readable, then it will be
+# processed **before** any user-provided files.
 # Options:
 #     -r/--reload     Printed script will assign all specified variables, even if
 #                     already assigned
+#     -q/--quiet      Suppress error messages
+#     -f/--file       Process YAML spec from file
+#     -h/--help       Display this message and exit
 # Parameters:
-#     \$@         Names of YAML spec files
+#     $@         Names of YAML spec files
 # Spec file format:
 #     The format is a simple key-value based assignment, but allows arbitrary YAML
 #     nesting.  A simple example will illustrate the format:
-#     \`\`\`yaml
+#     ```yaml
 #     key1:
 #       key2:
 #         ...keyN: value
-#     \`\`\`
+#     ```
 #     This markup will be parsed into the following script by \`pass env\`:
-#     \`\`\`bash
+#     ```bash
 #     KEY1_KEY2_..._KEYN=value
-#     \`\`\`
+#     ```
+# Examples:
+#     eval $(pass env -f -r) # Exports variables specified in $PASS_DIR/.env.yaml,
+#                            # forcing reassignment and suppressing error messages
+
+_pass_env_usage() {
+    cat <<-USAGE
+		pass env
+		--------
+
+		`sed -n '2,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# //'`
+		USAGE
+}
 
 needs() {
     local -a missing=( )
