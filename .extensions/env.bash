@@ -50,7 +50,19 @@ needs() {
     fi >&2
 }
 
+_print_conditional() {
+    if [ "$1" -eq 0 ]; then
+        shift
+        echo "$@"
+    fi
+}
+
 main() {
+    _err() {
+        _print_conditional $quiet "$@"
+        exit 1
+    } >&2
+
     needs gron yq grep awk pass
 
     local -a cred
