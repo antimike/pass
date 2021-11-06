@@ -65,47 +65,61 @@ main() {
 
     needs gron yq grep awk pass
 
-    local -a cred
-    local -i reload=0
+    local -a files
+    local -i reload=0 quiet=0
     local path pfile yml_addr cred
 
-    eval set -- $(getopt -o "r" -l "reload" -- "$@")
+    eval set -- $(getopt -o "rqhf:" -l "reload,quiet,help,file:" -- "$@")
     while [ $# -gt 0 ]; do
         case "$1" in
             -r|--reload) reload=1 ;;
+            -q|--quiet) quiet=1 ;;
+            -h|--help) _pass_env_usage; exit 0 ;;
+            -f|--file) files+=( "$2" ); shift ;;
             --) shift; break ;;
-            *) echo "Unknown opt: $1" >&2; exit 1 ;;
+            *) _err "Unknown opt: $1"; exit 1 ;;
         esac
         shift
     done
 
-    cat "$@" | yq '.' | gron |
-        grep -v "= {}" |
-        sed -e 's/^json\.//' -e 's/;$//' |
-        awk -v FS=" = " '
-            {
-                $1=toupper(gensub(/\./,"_","g",$1))
-                print
-            }' |
-        while read -r name path; do
-            cred=
-            if [ -n "${!name+x}" ] && [ $reload -ne 1 ]; then
-                echo "$name is already assigned."
-                echo "Pass the -r/--reload flag to overwrite it."
-                continue
-            fi >&2
-            # Remove quotes from `gron`
-            path="${path:1:-1}"
-            pfile="${path%%:*}"
-            yml_addr="${path#*:}"
-            read -d '' -r cred < <(pass show "$pfile" |
-                if [ "$pfile" = "$yml_addr" ]; then
-                head -1
-            else
-                sed '1d' | yq -r ".${yml_addr//:/.}"
-            fi)
-            echo "export $name=${cred@Q}"
-        done
+    if [ -r "${PASS_DIR}/.env.yaml" ]; then
+        files+=( "${PASS_DIR}/.env.yaml" )
+    fi
+
+    for file in "${files[@]}"; do
+        if ! [ -r "$file" ]; then
+            _err "Cannot read file $file"
+        fi
+        yq '.' "$file" | gron |
+            grep -v "= {}" |
+            sed -e 's/^json\.//' -e 's/;$//' |
+            awk -v FS=" = " '
+                {
+                    $1=toupper(gensub(/\./,"_","g",$1))
+                    print
+                }' |
+            while read -r name path; do
+                cred=
+                if [ -n "${!name+x}" ] && [ $reload -ne 1 ]; then
+                    if [ $quiet -ne 1 ]; then
+                        echo "$name is already assigned."
+                        echo "Pass the -r/--reload flag to overwrite it."
+                    fi
+                    continue
+                fi >&2
+                # Remove quotes from `gron`
+                path="${path:1:-1}"
+                pfile="${path%%:*}"
+                yml_addr="${path#*:}"
+                read -d '' -r cred < <(pass show "$pfile" |
+                    if [ "$pfile" = "$yml_addr" ]; then
+                    head -1
+                else
+                    sed '1d' | yq -r ".${yml_addr//:/.}"
+                fi)
+                echo "export $name=${cred@Q}"
+            done
+    done
 }
 
 main "$@"
