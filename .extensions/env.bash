@@ -75,7 +75,7 @@ main() {
             else
                 sed '1d' | yq -r ".${yml_addr//:/.}"
             fi)
-            echo "$name='$cred'"
+            echo "export $name=${cred@Q}"
         done
 }
 
