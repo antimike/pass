@@ -1,17 +1,24 @@
 #!/bin/bash
-# Assigns credential stored by \`pass\` to environment variable
-# Input:
-#   - Name of environment variable
-#       - Location of desired credential should be assigned to this variable
-#       prior to calling this function
-#       - Format: [path/to/cred/file]:[YAML property names]
-#       - If assigned value isn't found by \`pass\`, it's assumed that the
-#       correct password is already assigned
-# Examples:
-#   export TEST=personal/test:prop
-#   passenv TEST
-#   # If the line "prop: val" is included in the file $PASS_DIR/personal/test,
-#   # then this will assign the string "val" to variable TEST
+# Prints a script to assign environment variables based on
+# (1) a YAML specification file, and
+# (2) credentials stored in the \`pass\` store.
+# Options:
+#     -r/--reload     Printed script will assign all specified variables, even if
+#                     already assigned
+# Parameters:
+#     \$@         Names of YAML spec files
+# Spec file format:
+#     The format is a simple key-value based assignment, but allows arbitrary YAML
+#     nesting.  A simple example will illustrate the format:
+#     \`\`\`yaml
+#     key1:
+#       key2:
+#         ...keyN: value
+#     \`\`\`
+#     This markup will be parsed into the following script by \`pass env\`:
+#     \`\`\`bash
+#     KEY1_KEY2_..._KEYN=value
+#     \`\`\`
 
 needs() {
     local -a missing=( )
