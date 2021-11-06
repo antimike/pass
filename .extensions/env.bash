@@ -28,8 +28,21 @@ needs() {
 
 main() {
     needs gron yq grep awk pass
+
     local -a cred
-    local path pfile yml_addr
+    local -i reload=0
+    local path pfile yml_addr cred
+
+    eval set -- $(getopt -o "r" -l "reload" -- "$@")
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -r|--reload) reload=1 ;;
+            --) shift; break ;;
+            *) echo "Unknown opt: $1" >&2; exit 1 ;;
+        esac
+        shift
+    done
+
     cat "$@" | yq '.' | gron |
         grep -v "= {}" |
         sed -e 's/^json\.//' -e 's/;$//' |
@@ -39,22 +52,23 @@ main() {
                 print
             }' |
         while read -r name path; do
-            var=""
-            echo "Processing $name --> $path" >&2
+            cred=
+            if [ -n "${!name+x}" ] && [ $reload -ne 1 ]; then
+                echo "$name is already assigned."
+                echo "Pass the -r/--reload flag to overwrite it."
+                continue
+            fi >&2
             # Remove quotes from `gron`
             path="${path:1:-1}"
             pfile="${path%%:*}"
             yml_addr="${path#*:}"
-            read -d '' -r var < <(pass show "$pfile" |
+            read -d '' -r cred < <(pass show "$pfile" |
                 if [ "$pfile" = "$yml_addr" ]; then
-                echo "Extracting password from pfile $pfile..." >&2
                 head -1
             else
-                echo "Extracting YAML $yml_addr from pfile $pfile..." >&2
                 sed '1d' | yq -r ".${yml_addr//:/.}"
-                fi)
-            echo "Assigning $name=${var}" >&2
-            export "$name"="${var}"
+            fi)
+            echo "$name='$cred'"
         done
 }
 
