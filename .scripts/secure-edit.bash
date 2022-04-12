@@ -10,6 +10,7 @@ set -o pipefail
 typeset file="$1"
 typeset dest="${2:-${file}}"
 
+# NOTE: `mktemp --dry-run` is marked "unsafe" in the docs
 fifo="$(mktemp)" && rm -f "$fifo" && mkfifo "$fifo" ||
     die 27 "Unable to create FIFO"
 
