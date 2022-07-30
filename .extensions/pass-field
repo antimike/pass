@@ -1,6 +1,0 @@
-PASSWORD_STORE_EXTENSION_COMMANDS+=(field)
-
-__password_store_extension_complete_field() {
-    COMPREPLY+=($(compgen -- ${cur}))
-    _pass_complete_entries 1
-}

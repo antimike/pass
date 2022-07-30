@@ -1,0 +1,20 @@
+#!/bin/zsh -f
+# "Flattens" a simplified YAML conf file into a series of env variable declarations
+# Context for each processed line is taken to be the sequence of previous lines whose indentation lengths increase monotonically, chosen greedily in reverse beginning at the target line.
+# In other words, when line N is read, the smallest j such that line N-j has indentation less than that of line N is taken to be its immediate predecessor, and so on until the minimum level of indentation is reached.
+
+# ASCII \037 --> "unit separator"
+# ASCII \035 --> "group separator"
+awk -F':[[:space:]]*' -vOFS='\035' '
+    {
+        depth = match($0, /[^[:space:]]/)
+        $0 = substr($0, depth)
+        pos = 0
+        while (++pos < NR && stack[pos] < depth)
+            out = out toupper(keys[pos]) "_"
+        stack[pos][0] = depth
+        stack[pos][1] = $1
+        stack[pos][2] = $2
+        print(out toupper($1) "=" $2)
+    }
+' $1
