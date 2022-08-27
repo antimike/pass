@@ -1,0 +1,5 @@
+#!/bin/zsh -f
+# Gets the value of a named field from a passfile
+
+# pass show "$cred" |
+pass show $1 | grep "$1" | awk -F'[:=]+' '{print $2;}' | sed 's/^\s*//'

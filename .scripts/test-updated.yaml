@@ -1,6 +1,8 @@
-description: This is a description.
+description:
+  sub-description: This is a sub-description.
 comments:
   - First comment
   - Second comment
-username: someotheruser
-email: someotheruser@somewebsite.com
+url:
+  username: someotheruser
+  email: someotheruser@somewebsite.com
