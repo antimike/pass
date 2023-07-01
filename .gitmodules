@@ -1,0 +1,3 @@
+[submodule ".scripts/passed"]
+	path = .scripts/passed
+	url = https://github.com/repomaa/passed
